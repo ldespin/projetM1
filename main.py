@@ -8,6 +8,9 @@ import torch.nn.functional as F
 import os
 import h5py as h5
 import numpy as np
+import cv2
+import torch
+import matplotlib.pyplot as plt
 
 
 def get_imflow(flow, im_shape=(64, 64, 3)):
@@ -25,7 +28,7 @@ def get_imflow(flow, im_shape=(64, 64, 3)):
 def mse(output, target):
     return F.mse_loss(output, target)
 
-
+    
 if __name__ == '__main__':
 
     parser = ArgumentParser()
@@ -64,25 +67,37 @@ if __name__ == '__main__':
 
     for modality in data_mod:
         hparams.modality = modality
-        for rep in os.listdir('./data/'):
-            for file in os.listdir('./data/'+rep):
-                path = './data/'+rep+'/'+file
-                f = h5.File(path, 'r')
-                
-                data_test = []
-                if 'train' in file:
-                    hparams.data = path
+        rep = os.listdir('./data/')[0]
+        for file in os.listdir('./data/'+rep):
+            path = './data/'+rep+'/'+file
+            f = h5.File(path, 'r')
 
-                elif 'val' in file:
-                    hparams.data_val = path
+            if 'train' in file:
+                hparams.data = path
+            elif 'val' in file:
+                hparams.data_val = path
+            elif 'test' in file:
+                hparams.data_test = path
+                f = h5.File(hparams.data_test, 'r')
+                data_original = np.copy(np.asarray(f['noOcclusion']).transpose(0, 3, 1, 2))
+                data_test = np.copy(np.asarray(f[modality]).transpose(0, 3, 1, 2))
 
-                elif 'test' in file:
-                    hparams.data_test = path
+        
 
+        generator = Generator()
+        discriminator = Discriminator()
+        net = FaceGANNet(hparams, generator, discriminator)
+        trainer = pl.Trainer(max_epochs=hparams.epoch, checkpoint_callback=checkpoint_callback) 
+        trainer.fit(net)
+        trainer.test()
 
-            generator = Generator()
-            discriminator = Discriminator()
-            net = FaceGANNet(hparams, generator, discriminator)
-            trainer = pl.Trainer(max_epochs=hparams.epoch, checkpoint_callback=checkpoint_callback) 
-            trainer.fit(net)
-            print(trainer.test())
+        for i in range(len(data_original)):
+            original_im = get_imflow(np.transpose(data_original[i], (1, 2, 0)))
+            occluded_im = get_imflow(np.transpose(data_test[i], (1, 2, 0)))
+            output_gan = generator((torch.from_numpy(data_test[i]).float().unsqueeze(0)))
+            reconstructed_im = get_imflow(np.transpose(output_gan.detach().numpy().squeeze(), (1, 2, 0)))
+
+            cv2.imwrite('results/'+modality+'_original_'+str(i) + '.png', original_im)
+            cv2.imwrite('results/'+modality+'_occluded_' + str(i) + '.png', occluded_im)
+            cv2.imwrite('results/'+modality+'_reconstructed_' + str(i) + '.png', reconstructed_im)
+        

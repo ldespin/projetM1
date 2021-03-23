@@ -110,20 +110,13 @@ class FaceGANNet(pl.LightningModule):
         of_reconstruction = self.forward(of_input)
         test_loss = self.mse(of_reconstruction, of_output)
 
-        prediction = self.exp_rec(of_reconstruction)
-        test_acc_r = self.maccuracy(prediction, label)
 
-        prediction = self.exp_rec(of_original)
-        test_acc_o = self.maccuracy(prediction, label)
-
-        return {'test_loss': test_loss, 'test_acc_o': test_acc_o, 'test_acc_r': test_acc_r}
+        return {'test_loss': test_loss}
 
     def test_end(self, outputs):
         avg_test_loss = torch.stack([x['test_loss'] for x in outputs]).mean()
-        avg_test_acc_o = torch.stack([x['test_acc_o'] for x in outputs]).mean()
-        avg_test_acc_r = torch.stack([x['test_acc_r'] for x in outputs]).mean()
 
-        log_dict = {'avg_test_loss': avg_test_loss, 'avg_test_acc_o': avg_test_acc_o, 'avg_test_acc_r': avg_test_acc_r}
+        log_dict = {'avg_test_loss': avg_test_loss}
 
         return {'test_loss': avg_test_loss, 'log': log_dict}
 
