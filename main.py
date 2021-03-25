@@ -11,6 +11,7 @@ import numpy as np
 import cv2
 import torch
 import matplotlib.pyplot as plt
+from model.exp_rec import CNN as ExpNet
 
 
 def get_imflow(flow, im_shape=(64, 64, 3)):
@@ -48,7 +49,7 @@ if __name__ == '__main__':
     hparams = parser.parse_args()
 
     checkpoint_callback = ModelCheckpoint(
-            filepath=hparams.log_dir,
+            dirpath==hparams.log_dir,
             verbose=True,
             monitor='val_loss',
             mode='min',
@@ -64,6 +65,11 @@ if __name__ == '__main__':
 
     data_mod = ['mouth_3', 'noOcclusion']
     metrics = {'mouth_3': [], 'noOcclusion': []}
+
+    exp_rec = ExpNet()
+    exp_rec.load_state_dict(torch.load(hparams.recognition))
+    exp_rec.eval()
+    summary(exp_rec, input_size=(2, 64, 64))
 
     for modality in data_mod:
         hparams.modality = modality
@@ -82,11 +88,11 @@ if __name__ == '__main__':
                 data_original = np.copy(np.asarray(f['noOcclusion']).transpose(0, 3, 1, 2))
                 data_test = np.copy(np.asarray(f[modality]).transpose(0, 3, 1, 2))
 
-        
 
+        if hparams.baseline:
         generator = Generator()
         discriminator = Discriminator()
-        net = FaceGANNet(hparams, generator, discriminator)
+        net = FaceGANNet(hparams, generator, discriminator, exp_rec)
         trainer = pl.Trainer(max_epochs=hparams.epoch, checkpoint_callback=checkpoint_callback) 
         trainer.fit(net)
         trainer.test()

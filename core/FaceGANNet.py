@@ -9,13 +9,16 @@ from collections import OrderedDict
 
 class FaceGANNet(pl.LightningModule):
 
-    def __init__(self, hparams, generator, discriminator):
+    def __init__(self, hparams, generator, discriminator, exp_rec):
         super(FaceGANNet, self).__init__()
 
         self.generator = generator
         self.discriminator = discriminator
         self.hparams = hparams
+        self.exp_rec = exp_rec
 
+    def on_save_checkpoint(self, checkpoint):
+        torch.save(self.generator.state_dict(), self.hparams.log_dir + 'generator_test.pth')
 
     def forward(self,x):
         return self.generator(x)
@@ -33,6 +36,14 @@ class FaceGANNet(pl.LightningModule):
         correct = (predicted == y).sum().item()
 
         return 100 * (correct / total)
+
+    def maccuracy(self, output, target):
+        prediction = output.argmax(dim=1)
+
+        corrects = (prediction == target)
+        accuracy = corrects.sum().float() / float(target.size(0))
+        return 100 * accuracy
+
 
     def training_step(self, batch, batch_idx, optimizer_idx):
         # batch returns x and y tensors
@@ -109,6 +120,12 @@ class FaceGANNet(pl.LightningModule):
 
         of_reconstruction = self.forward(of_input)
         test_loss = self.mse(of_reconstruction, of_output)
+
+        prediction = self.exp_rec(of_reconstruction)
+        test_acc_r = self.maccuracy(prediction, label)
+
+        prediction = self.exp_rec(of_output)
+        test_acc_o = self.maccuracy(prediction, label)
 
 
         return {'test_loss': test_loss}
