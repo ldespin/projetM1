@@ -15,6 +15,12 @@ from model.exp_rec import CNN as ExpNet
 from torchsummary import summary
 
 
+device = torch.device('cpu')
+
+exp = ExpNet()
+exp.load_state_dict(torch.load(hparams.exp, map_location=device))
+exp.eval()
+
 def get_imflow(flow, im_shape=(64, 64, 3)):
     hsv = np.zeros(im_shape, dtype=np.uint8)
     hsv[..., 1] = 255
@@ -29,6 +35,13 @@ def get_imflow(flow, im_shape=(64, 64, 3)):
 
 def mse(output, target):
     return F.mse_loss(output, target)
+
+def accuracy(output, target):
+    prediction = output.argmax(dim=1)
+
+    corrects = (prediction == (target - 1))
+    accuracy = corrects.sum().float() 
+    return 100 * accuracy
 
     
 if __name__ == '__main__':
@@ -101,13 +114,23 @@ if __name__ == '__main__':
         trainer.fit(net)
         trainer.test()
 
+        results = {'mse':[], 'acc':[], 'acc_o':[]}
+
         for i in range(len(data_original)):
             original_im = get_imflow(np.transpose(data_original[i], (1, 2, 0)))
             occluded_im = get_imflow(np.transpose(data_test[i], (1, 2, 0)))
             output_gan = generator((torch.from_numpy(data_test[i]).float().unsqueeze(0)))
             reconstructed_im = get_imflow(np.transpose(output_gan.detach().numpy().squeeze(), (1, 2, 0)))
 
+            results['mse'].append(mse(output_gan, np.transpose(data_original[i], (1, 2, 0))))
+            results['acc_or'].append(exp(np.transpose(data_original[i], (1, 2, 0))))
+            results['acc'].append(exp(output_gan))
+
             cv2.imwrite('results/'+modality+'_original_'+str(i) + '.png', original_im)
             cv2.imwrite('results/'+modality+'_occluded_' + str(i) + '.png', occluded_im)
             cv2.imwrite('results/'+modality+'_reconstructed_' + str(i) + '.png', reconstructed_im)
+
+        print('MSE: '+str(np.asarray(results['mse']).mean()))
+        print('ACC: '+str(np.asarray(results['acc']).mean()))
+        print('ACC OR: '+str(np.asarray(results['acc_or']).mean()))
         

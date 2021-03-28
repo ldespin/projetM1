@@ -15,6 +15,7 @@ class FaceGANNet(pl.LightningModule):
         self.generator = generator
         self.discriminator = discriminator
         self.hparams = hparams
+        self.exp_rec = exp_rec
 
     def on_save_checkpoint(self, checkpoint):
         torch.save(self.generator.state_dict(), self.hparams.log_dir + 'generator_test.pth')
