@@ -15,12 +15,6 @@ from model.exp_rec import CNN as ExpNet
 from torchsummary import summary
 
 
-device = torch.device('cpu')
-
-exp = ExpNet()
-exp.load_state_dict(torch.load(hparams.exp, map_location=device))
-exp.eval()
-
 def get_imflow(flow, im_shape=(64, 64, 3)):
     hsv = np.zeros(im_shape, dtype=np.uint8)
     hsv[..., 1] = 255
@@ -63,7 +57,6 @@ if __name__ == '__main__':
     parser.add_argument("--recognition", type=str, default=None, help="recognition path")
 
     hparams = parser.parse_args()
-    device = torch.device('cuda')
     exp_rec = ExpNet()
     exp_rec.load_state_dict(torch.load(hparams.recognition))
     exp_rec.to(device)
@@ -105,6 +98,7 @@ if __name__ == '__main__':
                 f = h5.File(hparams.data_test, 'r')
                 data_original = np.copy(np.asarray(f['noOcclusion']).transpose(0, 3, 1, 2))
                 data_test = np.copy(np.asarray(f[modality]).transpose(0, 3, 1, 2))
+                labels = np.copy(np.asarray(f['labels']))
 
 
         generator = Generator()
@@ -121,10 +115,13 @@ if __name__ == '__main__':
             occluded_im = get_imflow(np.transpose(data_test[i], (1, 2, 0)))
             output_gan = generator((torch.from_numpy(data_test[i]).float().unsqueeze(0)))
             reconstructed_im = get_imflow(np.transpose(output_gan.detach().numpy().squeeze(), (1, 2, 0)))
+            label = labels[i]
 
             results['mse'].append(mse(output_gan, np.transpose(data_original[i], (1, 2, 0))))
-            results['acc_or'].append(exp(np.transpose(data_original[i], (1, 2, 0))))
-            results['acc'].append(exp(output_gan))
+            pred_or = exp_rec(np.transpose(data_original[i], (1, 2, 0)))
+            pred = exp_rec(output_gan)
+            results['acc_or'].append(pred_or.argmax(dim=1), label)
+            results['acc'].append(accuracy(pred.argmax(dim=1)),label)
 
             cv2.imwrite('results/'+modality+'_original_'+str(i) + '.png', original_im)
             cv2.imwrite('results/'+modality+'_occluded_' + str(i) + '.png', occluded_im)
