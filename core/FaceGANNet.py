@@ -15,7 +15,6 @@ class FaceGANNet(pl.LightningModule):
         self.generator = generator
         self.discriminator = discriminator
         self.hparams = hparams
-        self.exp_rec = exp_rec
 
     def on_save_checkpoint(self, checkpoint):
         torch.save(self.generator.state_dict(), self.hparams.log_dir + 'generator_test.pth')
@@ -45,7 +44,7 @@ class FaceGANNet(pl.LightningModule):
         return 100 * accuracy
 
 
-    def training_step(self, batch, batch_idx, optimizer_idx):
+    def training_step(self, batch, batch_idx, optimizer_idx=0):
         # batch returns x and y tensors
         input_images, output_images, _ = batch.values()
 
@@ -93,18 +92,20 @@ class FaceGANNet(pl.LightningModule):
 
             d_loss = (real_loss + fake_loss)/2.0
             d_acc = (real_acc + fake_acc) / 2
-            
+
             # for output and logging purposes (return as dictionaries)
-            tqdm_dict = {'d_loss': d_loss}
+            tqdm_dict = {'d_loss': d_loss,'d_loss_real': real_loss,'d_loss_fake': fake_loss, 'd_acc': d_acc,'d_acc_real': real_acc,'d_acc_fake': fake_acc,}
             output = OrderedDict({
                 'loss': d_loss,
                 'progress_bar': tqdm_dict,
                 'log': tqdm_dict,
                 'd_loss': d_loss,
+                'd_loss_real': real_loss,
+                'd_loss_fake': fake_loss,
                 'd_acc': d_acc
             })
             return output
-    
+
     def configure_optimizers(self):
         if self.hparams.baseline :
             optimizer_G = torch.optim.Adam(self.generator.parameters(), lr=self.hparams.learning_rate_g, betas=(0.4, 0.999))
@@ -127,8 +128,7 @@ class FaceGANNet(pl.LightningModule):
         prediction = self.exp_rec(of_output)
         test_acc_o = self.maccuracy(prediction, label)
 
-
-        return {'test_loss': test_loss}
+        return {'test_loss': test_loss, 'test_acc_r': test_acc_r, 'test_acc_o': test_acc_o}
 
     def test_end(self, outputs):
         avg_test_loss = torch.stack([x['test_loss'] for x in outputs]).mean()

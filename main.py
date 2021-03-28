@@ -12,6 +12,7 @@ import cv2
 import torch
 import matplotlib.pyplot as plt
 from model.exp_rec import CNN as ExpNet
+from torchsummary import summary
 
 
 def get_imflow(flow, im_shape=(64, 64, 3)):
@@ -35,7 +36,7 @@ if __name__ == '__main__':
     parser = ArgumentParser()
     parser.add_argument("--log_dir", type=str, default="checkpoint/", help="checkpoint path")
 
-    parser.add_argument("--epoch", type=int, default=100, help="number of epoch")
+    parser.add_argument("--epoch", type=int, default=500, help="number of epoch")
     parser.add_argument("--batch_size", type=int, default=8, help="batch size")
     parser.add_argument("--learning_rate_g", type=float, default=0.0001, help="generator learning rate")
     parser.add_argument("--learning_rate_d", type=float, default=0.0001, help="discriminator learning rate")
@@ -46,10 +47,18 @@ if __name__ == '__main__':
     parser.add_argument("--data_test", type=str, default=None, help="data test cross val path")
     parser.add_argument("--modality", type=str, default=None, help="modality")
 
+    parser.add_argument("--recognition", type=str, default=None, help="recognition path")
+
     hparams = parser.parse_args()
+    device = torch.device('cuda')
+    exp_rec = ExpNet()
+    exp_rec.load_state_dict(torch.load(hparams.recognition))
+    exp_rec.to(device)
+    exp_rec.eval()
+    summary(exp_rec, input_size=(2, 64, 64))
 
     checkpoint_callback = ModelCheckpoint(
-            dirpath==hparams.log_dir,
+            dirpath=hparams.log_dir,
             verbose=True,
             monitor='val_loss',
             mode='min',
@@ -66,10 +75,6 @@ if __name__ == '__main__':
     data_mod = ['mouth_3', 'noOcclusion']
     metrics = {'mouth_3': [], 'noOcclusion': []}
 
-    exp_rec = ExpNet()
-    exp_rec.load_state_dict(torch.load(hparams.recognition))
-    exp_rec.eval()
-    summary(exp_rec, input_size=(2, 64, 64))
 
     for modality in data_mod:
         hparams.modality = modality
@@ -89,7 +94,6 @@ if __name__ == '__main__':
                 data_test = np.copy(np.asarray(f[modality]).transpose(0, 3, 1, 2))
 
 
-        if hparams.baseline:
         generator = Generator()
         discriminator = Discriminator()
         net = FaceGANNet(hparams, generator, discriminator, exp_rec)
